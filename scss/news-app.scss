@@ -1,0 +1,88 @@
+@import "../../scss/variables";
+@import "_variables.scss";
+@import "_mixins.scss";
+
+.form-station-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    @media screen and (max-width: $fib16) {
+        flex-direction: column;
+    }
+}
+.spinner-holder {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 2rem;
+}
+form {
+    display: inline-block;
+    @include border-panel;
+    input {
+        display: block;
+        &[type="submit"] {
+            margin-top: $fib5;
+        }
+    }
+    label {
+        display: block;
+        font-weight: 600;
+        &.error {
+            color: $error;
+        }
+    }
+}
+#stations-outer {
+    display: inline-block;
+    &.hidden-panel.active {
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    h3 {
+        margin: 0;
+    }
+    .station {
+        margin: $fib1;
+        line-height: 1.3em;
+        border-radius: $fib5;
+        padding: $fib3 $fib4;
+        border-radius: $fib3;
+        border: 1px solid transparent;
+        h4 {
+            margin: 0;
+        }
+        p {
+            padding-left: $fib7;
+            margin: 0;
+        }
+        &.sel {
+            border: 1px solid $light-grey;
+        }
+        &:not(.sel) {
+            cursor: pointer;
+            &:hover {
+                border: 1px solid $light-grey;
+            }
+        }
+    }
+}
+.chart-panel {
+    margin-top: $vertical-panel-margin;
+    @media (max-width: 768px) {
+        padding: $fib3 $fib4 !important;
+    }
+}
+.hidden-panel {
+    max-height: 0;
+    transition: max-height $transition;
+    overflow: hidden;
+    @include border-panel;
+    &.active {
+        max-height: 10000px;
+    }
+    &:not(.active) {
+        border: none;
+        padding: 0;
+    }
+}

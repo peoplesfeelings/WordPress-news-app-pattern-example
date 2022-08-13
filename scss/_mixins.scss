@@ -1,0 +1,6 @@
+@import '../../scss/mixins';
+
+@mixin border-panel {
+    padding: $fib6 $fib7;
+    @include grey-outline;
+}
