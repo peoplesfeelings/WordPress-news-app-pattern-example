@@ -22,6 +22,8 @@ function get_data(WP_REST_Request $data) {
     $startDateStr = getStartDateStr($duration);
     // toLog($startDateStr); 
     $endDateStr = getEndDateStr();
+    // we need to know the stations to query in, in order to query data. 
+    // find what stations have data in the date range and in the bounding box
     $stationsResponseObj = getCdoStations(CDO_DATASET, $bboxSwNe, $startDateStr);
     $resultsets = getCdoDataResultsets(CDO_DATASET, $startDateStr, $endDateStr, getCdoStationsStr($stationsResponseObj), "TAVG");
     $byStation = transformByStation($resultsets);
@@ -44,6 +46,21 @@ function get_data(WP_REST_Request $data) {
 //
 // CDO Web Services API v2
 //
+
+/*
+    Here's how to understand the data format. 
+
+    The user decides how many years to query for and it may be a large number of years like 80.
+    CDO v2 API has a limit on the date range for a query (max of 10 year range for querying monthly data).
+    So we break up the query we wish we could send into chunks of 10 years or less and query for each date range chunk.
+    Within one query, there may be multiple pages, because sometimes there are more results than fit in max length of a response.
+
+    "resultsets" means an array of resultsets.
+    One "resultset" is a set of pages for a specific date range. 
+
+    We organize this data into an array of years per weather station, before sending it to the client, 
+    in the transform functions.
+*/
 
 function getCdoStations($datasetId, $bbox, $startDate) {
     $baseUrl = "https://www.ncdc.noaa.gov/cdo-web/api/v2/stations";
