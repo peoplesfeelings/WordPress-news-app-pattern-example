@@ -151,8 +151,19 @@ export default function define(runtime, observerFactory) {
         )
     });
     main.variable().define("yAxis", ["config", "d3", "depthAngleXScale", "depthAngleYScale"], function (config, d3, depthAngleXScale, depthAngleYScale) {
-        return (
+        /* 
+            This is how we're producing the year labels at the left side of the line charts
 
+            It's kind of a hack to offset the text horizontally using the x attribute on the svg text element, but it suffices here.
+            It's a hack because the tick is not moved, the text of the tick is just offset with an attribute. So 
+            we fake a tick mark with a hyphen, here.
+            I'm not sure if there's a straightforward/maintainable way to produce the diagonal axis using the d3.axis API, for this kind
+            of dynamic manipulation by a UI control. It could be done by transforming multiple elements within the axis 
+            in complementary ways to produce the desired result, but linking that to the rest of the 3d control code seems like
+            it could make the complexity a headache to work with. 
+        */
+        
+        return (
             g => g
                 .attr("transform", `translate(${config.margin.left},0)`)
                 .call(d3.axisLeft(depthAngleYScale).tickSize(0).tickPadding(4))
@@ -267,8 +278,9 @@ export default function define(runtime, observerFactory) {
             low: d3.min(dataFromWeatherStation, d => d.value)
         }
     });
+    // these joystick usable cells provide numbers used as CSS pixel values for offsetting svg elements.
     main.variable().define("joystickXUsable", ["joystickRaw", "config"], function (joystickRaw, config) {
-        // raw joystick x as a positive or negative value centered around 0, within specified range in either direction
+        // raw joystick x as a positive or negative value centered around 0, within specified range in either direction.
         const pos = config.joystickXExtent * joystickRaw[0];
         const posZeroCentered = pos - (config.joystickXExtent / 2);
         return posZeroCentered;
@@ -343,6 +355,7 @@ export default function define(runtime, observerFactory) {
                 svg.style('cursor', 'grab')
             });
 
+        // put the zoom on an overlay because chart elments are destroyed while dragging and browser support for event handling in that scenrio varies
         const panOverlay = svg.append("rect")
             .attr("width", wid)
             .attr("height", height)
@@ -350,6 +363,7 @@ export default function define(runtime, observerFactory) {
             .attr("fill", "transparent")
             .call(zoom);
 
+        // set starting position
         zoom.translateTo(panOverlay, wid - (wid * mutableJoystickRaw.value[0]), height - (height * mutableJoystickRaw.value[1]));
 
         function zoomed(e) {
