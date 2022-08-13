@@ -49,7 +49,7 @@
     let allStationsData = {};
 
     // observable stuff
-    import define from "<?php echo get_site_url(); ?>/wp-content/themes/peoplesfeelings/news-app/parts/ridgeline/notebook.js";
+    import define from "<?php echo get_template_directory_uri(); ?>/news-app/parts/ridgeline/notebook.js";
     import {
         Runtime,
         Library,
