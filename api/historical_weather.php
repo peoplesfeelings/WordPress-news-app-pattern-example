@@ -7,40 +7,31 @@ define("CDO_REQUEST_YEAR_LIMIT_STEP", 10);
 
 // rest route 
 function get_data(WP_REST_Request $data) {
-    $params = $data->get_url_params();
-
     $zip = $data['zip'];
     $distance = $data['distance'];
     $duration = $data['duration'];
 
-    // terrible server-side code (heuristic):
-
     $coords = getCoordinates($zip);
-    // toLog($coords);
     $bboxSwNe = getBoundingBoxSwNe($coords, $distance);
-    // toLog($bboxSwNe); 
     $startDateStr = getStartDateStr($duration);
-    // toLog($startDateStr); 
     $endDateStr = getEndDateStr();
     // we need to know the stations to query in, in order to query data. 
     // find what stations have data in the date range and in the bounding box
     $stationsResponseObj = getCdoStations(CDO_DATASET, $bboxSwNe, $startDateStr);
-    $resultsets = getCdoDataResultsets(CDO_DATASET, $startDateStr, $endDateStr, getCdoStationsStr($stationsResponseObj), "TAVG");
+    $stationsStr = getCdoStationsStr($stationsResponseObj);
+    $resultsets = getCdoDataResultsets(CDO_DATASET, $startDateStr, $endDateStr, $stationsStr, "TAVG");
     $byStation = transformByStation($resultsets);
     $trimmed = trimArrays($byStation);
 
     $responseObj = [
+        'coords' => $coords,
+        'bbox' => $bboxSwNe,
         'stations' => $stationsResponseObj,
+        'stationsStr' => $stationsStr,
         'data' => $trimmed
     ];
 
-    $jsonStr = json_encode($responseObj);
-    // $responseSize = strlen($jsonStr);
-    // $responseObj['response_size'] = $responseSize;
-    // $jsonStr = json_encode($responseObj);
-
-    echo $jsonStr;
-    die;
+    return json_encode($responseObj);
 }
 
 //
@@ -63,33 +54,27 @@ function get_data(WP_REST_Request $data) {
 */
 
 function getCdoStations($datasetId, $bbox, $startDate) {
-    $baseUrl = "https://www.ncdc.noaa.gov/cdo-web/api/v2/stations";
-    $finalUrl = $baseUrl . (empty($datasetId) ? "?x=y": "?datasetid=$datasetId") . (empty($bbox) ? "": "&extent=$bbox") . (empty($startDate) ? "": "&startdate=$startDate") . "&datatypeid=TAVG";
-    toLog('final cdo stations url ' . $finalUrl);
-
-    $headers = array(
-        "token: " . $GLOBALS['ini_array']['cdo_v2_api_key']
-    );
     try {
+        $baseUrl = "https://www.ncdc.noaa.gov/cdo-web/api/v2/stations";
+        $finalUrl = $baseUrl . (empty($datasetId) ? "?x=y": "?datasetid=$datasetId") . (empty($bbox) ? "": "&extent=$bbox") . (empty($startDate) ? "": "&startdate=$startDate") . "&datatypeid=TAVG";
+
+        $headers = array(
+            "token: " . $GLOBALS['ini_array']['cdo_v2_api_key']
+        );
         $curl = curl_init();
         curl_setopt($curl, CURLOPT_URL, $finalUrl);
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
         $jsonString = curl_exec($curl);
-        toLog($jsonString);
         curl_close($curl);
+
+        if (responseGood($jsonString)) {
+            return json_decode($jsonString);
+        } else {
+            return "response not good. " . $jsonString;
+        }
     } catch (Exception $e) {
-        toLog('error in getCdoLocationData');
-        toLog($e->getMessage());
-        return NULL;
-    }
-    if (responseGood($jsonString)) {
-        $obj = json_decode($jsonString);
-        // toDataDump($jsonString, "cdo stations for $datasetId $startDate $bbox");
-        return $obj;
-    } else {
-        toLog("response not good");
-        return NULL;
+        return $e->getMessage();
     }
 }
 function getCdoStationsStr($responseObj) {
@@ -142,9 +127,16 @@ function getCdoResultsetPages($datasetId, $startDateStr, $endDateStr, $stations,
     $done = false;
     $offset = 1;
     while (!$done) {
-        $responseJson = getCdoData($datasetId, $startDateStr, $endDateStr, $stations, $dataTypes, $offset);
-        // toDataDump($responseJson, 'thing');
-        $response = json_decode($responseJson);
+        $needSleep = false;
+        do {
+            $responseJson = getCdoData($datasetId, $startDateStr, $endDateStr, $stations, $dataTypes, $offset);
+            $response = json_decode($responseJson);
+            $needSleep = $response->status == '429';
+            if ($needSleep) {
+                usleep(500); 
+            } 
+        } while ($needSleep);
+        
         array_push($responseArr, $response);
         $offset = getNextOffset($response->metadata->resultset);
         if ($offset == -1) {
@@ -155,10 +147,14 @@ function getCdoResultsetPages($datasetId, $startDateStr, $endDateStr, $stations,
     return $responseArr;
 }
 function getNextOffset($resultsetMeta) {
-    // for use by getCdoResultsetPages
-    if ($resultsetMeta->offset + $resultsetMeta->limit <= $resultsetMeta->count) {
-        return $resultsetMeta->offset + $resultsetMeta->limit;
-    } else {
+    try {
+        // for use by getCdoResultsetPages
+        if ($resultsetMeta->offset + $resultsetMeta->limit <= $resultsetMeta->count) {
+            return $resultsetMeta->offset + $resultsetMeta->limit;
+        } else {
+            return -1;
+        }
+    } catch(Exception $e) {
         return -1;
     }
 }
@@ -168,7 +164,6 @@ function getCdoDataResultsets($datasetId, $startDateStr, $endDateStr, $stations,
     // this function gets passed the "master" start and end date: the actual range expected by the user.
     // getDateRangeArray breaks that range up into an array of ranges, because CDO API has a limit on date range length.
     $dateRangesArray = getDateRangeArray($startDateStr, $endDateStr);
-    toLog("date ranges: " . print_r($dateRangesArray, true));
 
     // "resultsets" being a set of resultsets to queries sent to CDO v2 Data endpoint. 1 resultset if less than 10 years, etc. 
     // the api disallows date range of more than 10 years. so we paginate through date ranges to produce an array of resultsets. 
@@ -191,7 +186,7 @@ function getGeocoding($zip) {
     // mapquest geocoding api
     $mapquestConsumerKey = $GLOBALS['ini_array']['mapquest_key'];
     $baseUrl = 'http://open.mapquestapi.com/geocoding/v1/address';
-    $finalUrl = $baseUrl . '?key=' . $mapquestConsumerKey . '&location=' . $zip;
+    $finalUrl = $baseUrl . '?key=' . $mapquestConsumerKey . '&location={"zip":"' . $zip . '","country":"US"}';
 
     try {
         $curl = curl_init();
@@ -201,18 +196,12 @@ function getGeocoding($zip) {
         $jsonString = curl_exec($curl);
         curl_close($curl);
         $obj = json_decode($jsonString);
-        // toLog('geocoding result count: ' . count($obj->results));
-        // toLog('geocoding location count: ' . count($obj->results[0]->locations));
-        foreach($obj->results[0]->locations as $loc) {
-            // toLog("geocoding coord: " . $loc->latLng->lat . ', ' . $loc->latLng->lng);
-        }
+        return $obj;
     } catch (Exception $e) {
         toLog('error in getGeocoding');
         toLog($e->getMessage());
         return NULL;
     }
-
-    return $obj;
 }
 function getCoordinates($zip) {
     $data = getGeocoding($zip);
@@ -336,10 +325,11 @@ function responseGood($response) {
         return false;
     }
     if (!isJson($response)) {
-        toLog("response not json: " . $response);
         return false;
     }
-    // further checks on the json could go here
+    if (strlen($response) < 3) {
+        return false;
+    }
     return true;
 }
 

@@ -11,7 +11,7 @@
 <div class="form-station-wrapper">
     <form action="" name="station-input">
         <label for="zip">Zip</label>
-        <input type="text" name="zip" autofocus value="30001" />
+        <input type="text" name="zip" autofocus value="64030" />
         <label for="distance">Radius for weather stations (km)</label>
         <input type="text" name="distance" value="45" />
         <label for="duration">Time (yrs)</label>
@@ -158,6 +158,8 @@
             dataType: 'JSON',
             timeout: 2 * 60 * 1000,
             success: function(response) {
+                response = JSON.parse(response);
+                console.log('resp', response);
                 vStations.stations = addCountToStations(response.stations.results, response.data);
                 let bestKey = findBest(response.data);
                 vStations.selected = bestKey;
