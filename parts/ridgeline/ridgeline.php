@@ -11,7 +11,7 @@
 <div class="form-station-wrapper">
     <form action="" name="station-input">
         <label for="zip">Zip</label>
-        <input type="text" name="zip" autofocus value="64030" />
+        <input type="text" name="zip" autofocus />
         <label for="distance">Radius for weather stations (km)</label>
         <input type="text" name="distance" value="45" />
         <label for="duration">Time (yrs)</label>

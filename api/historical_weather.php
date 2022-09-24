@@ -186,7 +186,7 @@ function getGeocoding($zip) {
     // mapquest geocoding api
     $mapquestConsumerKey = $GLOBALS['ini_array']['mapquest_key'];
     $baseUrl = 'http://open.mapquestapi.com/geocoding/v1/address';
-    $finalUrl = $baseUrl . '?key=' . $mapquestConsumerKey . '&location={"zip":"' . $zip . '","country":"US"}';
+    $finalUrl = $baseUrl . '?key=' . $mapquestConsumerKey . '&location=' . $zip;
 
     try {
         $curl = curl_init();
@@ -209,11 +209,14 @@ function getCoordinates($zip) {
         return NULL;
     }
     try {
-        return [$data->results[0]->locations[0]->latLng->lat, $data->results[0]->locations[0]->latLng->lng];
+        foreach($data->results[0]->locations as $loc) {
+            if ($loc->adminArea1 == 'US') {
+                return [$loc->latLng->lat, $loc->latLng->lng];
+            }
+        }
+        return 'no US locations';
     } catch (Exception $e) {
-        toLog('error in getCoordinates');
-        toLog($e->getMessage());
-        return NULL;
+        return $e->getMessage();
     }
 }
 function getBoundingBoxSwNe($coords, $distance) {
